@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Cex
 if [ "${TENSORFLOW_VER}" == "" ];then
-    TENSORFLOW_VER=v1.9.0
+    TENSORFLOW_VER=v1.8.0
 fi
 if [ "${PYTHON_ENV_VER}" == "" ];then
     # brew install pyenv-virtualenv
@@ -13,11 +13,13 @@ eval "$(pyenv init -)"
 pyenv shell ${PYENV_VERSION}
 
 # see https://www.tensorflow.org/install/install_sources
-#pip install six numpy wheel 
+pip install six numpy wheel
 
 cd tensorflow/
-#git fetch
-#git checkout ${TENSORFLOW_VER}
+git fetch
+git checkout ${TENSORFLOW_VER}
+git reset --hard
+patch -p1 < ../patch/${TENSORFLOW_VER}.patch
 
 if [ "${CUDA_HOME}" == "" ];then
     export CUDA_HOME="/usr/local/cuda"
@@ -54,6 +56,7 @@ if [ "${TF_CUDA_COMPUTE_CAPABILITIES}" == "" ];then
 fi
 if [ "${TF_CUDA_CLANG}" == "" ];then
     export TF_CUDA_CLANG="0"
+    export CLANG_CUDA_COMPILER_PATH=$(which clang)
 fi
 
 export TF_NEED_OPENCL=0
@@ -63,11 +66,7 @@ export TF_NEED_KAFKA=0
 export TF_ENABLE_XLA=0
 export TF_NEED_VERBS=0
 export TF_NEED_GDR=0
-if [ "${CPU_OPT}" == 0 ];then
-    export TF_NEED_MKL=0
-else
-    export TF_NEED_MKL=1
-fi
+export TF_NEED_MKL=1
 export TF_DOWNLOAD_MKL=1
 export TF_NEED_MPI=0
 export TF_SET_ANDROID_WORKSPACE=0
@@ -79,29 +78,20 @@ bazel clean
 
 ./configure
 
-if [ "${CPU_OPT}" == 0 ];then
-    bazel build \
-        --config=cuda \
-        --config=opt \
-        --action_env PATH \
-        --action_env LD_LIBRARY_PATH \
-        --action_env DYLD_LIBRARY_PATH //tensorflow/tools/pip_package:build_pip_package
-else
-    bazel build \
-        --config=cuda \
-        --config=opt \
-        --config=mkl \
-        --config=monolithic \
-        --copt=-mfpmath=both \
-        --copt=-mavx \
-        --copt=-mavx2 \
-        --copt=-mfma \
-        --copt=-msse4.1 \
-        --copt=-msse4.2 \
-        --action_env PATH \
-        --action_env LD_LIBRARY_PATH \
-        --action_env DYLD_LIBRARY_PATH //tensorflow/tools/pip_package:build_pip_package
-fi
+bazel build \
+    --config=cuda \
+    --config=opt \
+    --config=mkl \
+    --config=monolithic \
+    --copt=-mfpmath=both \
+    --copt=-mavx \
+    --copt=-mavx2 \
+    --copt=-mfma \
+    --copt=-msse4.1 \
+    --copt=-msse4.2 \
+    --action_env PATH \
+    --action_env LD_LIBRARY_PATH \
+    --action_env DYLD_LIBRARY_PATH //tensorflow/tools/pip_package:build_pip_package
 
 mkdir -p out
 
